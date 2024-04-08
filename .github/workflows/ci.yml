@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/ci.yml"
+      - "**/*.swift"
+  workflow_dispatch:
+
+concurrency:
+  group: "ci-${{ github.head_ref || github.run_id }}"
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    container:
+      image: swift:5.10-amazonlinux2
+    steps:
+      - name: Install additional dependencies
+        run: yum -y install {libuuid,libicu,libedit,sqlite,python,ncurses,openssl}-devel libtool jq zip
+      
+      - name: Checkout
+        uses: actions/checkout@v3
+      
+      - name: Cache SPM
+        uses: actions/cache@v3
+        with:
+          path: .build
+          key: ${{ runner.os }}-spm-${{ hashFiles('Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-
+
+      - name: Build
+        run: swift build --build-tests
+
+      - name: Test
+        run: swift test --skip-build
+      
+      - name: Archive
+        run: |
+          mkdir -p archives
+          swift package archive --output-path archives --verbose 2
+
+  validate-SAM-template:
+    name: Validate SAM Templates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup python 
+        uses: actions/setup-python@v5
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup SAM
+        uses: aws-actions/setup-sam@v2
+
+      - name: Validate template
+        run: make validate-sam-template
+
+      - name: Build template
+        run: make build-sam-template

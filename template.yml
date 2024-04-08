@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion : '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: A SAM template for deploying the Status Lambda function
+
+Resources:
+  TMDBApiGateway:
+    Type: AWS::Serverless::HttpApi
+
+  StatusFunction: 
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: StatusHandler
+      Handler: Provided
+      Runtime: provided.al2
+      PackageType: Zip
+      CodeUri: archives/Status/Status.zip
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            Method: get
+            Path: /status
+            ApiId: !Ref TMDBApiGateway
+
+Outputs:
+  TDMbAPIEndpoint:
+    Description: "API Gateway endpoint URL for your application"
+    Value: !Sub "https://${TMDBApiGateway}.execute-api.${AWS::Region}.amazonaws.com"
